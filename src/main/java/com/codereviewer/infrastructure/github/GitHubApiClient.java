@@ -4,6 +4,8 @@ import com.codereviewer.infrastructure.github.GitHubDtos.CreateReviewRequest;
 import com.codereviewer.infrastructure.github.GitHubDtos.Contributor;
 import com.codereviewer.infrastructure.github.GitHubDtos.PullRequest;
 import com.codereviewer.infrastructure.github.GitHubDtos.PullRequestFile;
+import com.codereviewer.infrastructure.github.GitHubDtos.PullRequestCommentRequest;
+import com.codereviewer.infrastructure.github.GitHubDtos.PullRequestSummary;
 import com.codereviewer.infrastructure.github.GitHubDtos.RepositoryDetails;
 import com.codereviewer.infrastructure.github.GitHubDtos.SubmittedReview;
 import com.codereviewer.infrastructure.github.GitHubDtos.UserProfile;
@@ -14,6 +16,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -44,11 +47,52 @@ public class GitHubApiClient {
 
     /** Fetches the files (with patches) of a pull request. */
     public List<PullRequestFile> getPullRequestFiles(String owner, String repo, int pullNumber) {
+        List<PullRequestFile> files = new ArrayList<>();
+        for (int page = 1; page <= 30; page++) {
+            List<PullRequestFile> pageFiles = getPullRequestFilesPage(owner, repo, pullNumber, page);
+            if (pageFiles == null || pageFiles.isEmpty()) {
+                break;
+            }
+            files.addAll(pageFiles);
+            if (pageFiles.size() < 100) {
+                break;
+            }
+        }
+        return List.copyOf(files);
+    }
+
+    private List<PullRequestFile> getPullRequestFilesPage(String owner, String repo,
+                                                          int pullNumber, int page) {
         return execute(() -> restClient.get()
-                .uri("/repos/{owner}/{repo}/pulls/{number}/files?per_page=100", owner, repo, pullNumber)
+                .uri("/repos/{owner}/{repo}/pulls/{number}/files?per_page=100&page={page}",
+                        owner, repo, pullNumber, page)
                 .retrieve()
                 .body(new ParameterizedTypeReference<List<PullRequestFile>>() {
                 }));
+    }
+
+    /** Fetches the newest 100 open pull requests for a repository. */
+    public List<PullRequestSummary> listOpenPullRequests(String owner, String repo) {
+        return execute(() -> restClient.get()
+                .uri("/repos/{owner}/{repo}/pulls?state=open&sort=created&direction=desc&per_page=100",
+                        owner, repo)
+                .retrieve()
+                .body(new ParameterizedTypeReference<List<PullRequestSummary>>() {
+                }));
+    }
+
+    /** Posts a general comment on a pull request through GitHub's issue-comments API. */
+    public void createPullRequestComment(String owner, String repo, int pullNumber,
+                                         PullRequestCommentRequest request) {
+        execute(() -> {
+            restClient.post()
+                    .uri("/repos/{owner}/{repo}/issues/{number}/comments", owner, repo, pullNumber)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(request)
+                    .retrieve()
+                    .toBodilessEntity();
+            return null;
+        });
     }
 
     /** Submits findings as a pull request review. */

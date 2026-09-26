@@ -67,6 +67,22 @@ public final class GitHubDtos {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
+    public record PullRequestSummary(
+            Long id,
+            Integer number,
+            String title,
+            String state,
+            Boolean draft,
+            @JsonProperty("html_url") String htmlUrl,
+            @JsonProperty("updated_at") Instant updatedAt,
+            User user
+    ) {
+    }
+
+    public record PullRequestCommentRequest(String body) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public record CreateReviewRequest(
             String commitId,
             String body,

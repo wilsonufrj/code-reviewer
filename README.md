@@ -44,6 +44,38 @@ The application starts on `http://localhost:8080`.
 | `github.api-base-url` | `GITHUB_API_BASE_URL` | `https://api.github.com` | GitHub Enterprise support |
 | `github.token` | `GITHUB_TOKEN` | — | GitHub token; never logged |
 | `github.enabled` | `GITHUB_REVIEWS_ENABLED` | `false` | Dry-run switch |
+| `github.pull-request-monitor.enabled` | `GITHUB_PR_MONITOR_ENABLED` | `false` | Enables PR polling |
+| `github.pull-request-monitor.owner` | `GITHUB_PR_MONITOR_OWNER` | — | Repository owner to monitor |
+| `github.pull-request-monitor.repository` | `GITHUB_PR_MONITOR_REPOSITORY` | — | Repository name to monitor |
+| `github.pull-request-monitor.interval-ms` | `GITHUB_PR_MONITOR_INTERVAL_MS` | `60000` | Poll delay in milliseconds |
+
+## Pull request monitor
+
+Enable the scheduler for one repository before starting the application:
+
+```bash
+export GITHUB_PR_MONITOR_ENABLED=true
+export GITHUB_PR_MONITOR_OWNER=octocat
+export GITHUB_PR_MONITOR_REPOSITORY=hello-world
+export GITHUB_PR_MONITOR_INTERVAL_MS=60000
+mvn spring-boot:run
+```
+
+The first successful poll silently records the current open pull requests. Later polls print each
+new pull request once:
+
+```text
+New open pull request: octocat/hello-world#42 | title="Add feature" | author=octocat | url=https://github.com/octocat/hello-world/pull/42
+```
+
+For every newly detected pull request, the application posts one or more Markdown comments listing
+all changed files and their GitHub status (`added`, `modified`, `removed`, or `renamed`). Reports are
+split into groups of 100 files. The GitHub token therefore needs pull-request read access and issue
+write access.
+
+The monitor checks the newest 100 open pull requests. Its in-memory baseline resets whenever the
+application restarts. It reports and comments on new pull requests, but it does not trigger an
+automated code review.
 
 ## API
 
