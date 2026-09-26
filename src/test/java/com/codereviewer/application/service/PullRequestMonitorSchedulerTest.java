@@ -35,7 +35,7 @@ class PullRequestMonitorSchedulerTest {
     @Mock
     private GitHubApiClient gitHubApiClient;
     @Mock
-    private PullRequestChangedFilesCommentService commentService;
+    private PullRequestAiReviewService aiReviewService;
 
     private PullRequestMonitorScheduler scheduler;
     private Logger logger;
@@ -45,7 +45,7 @@ class PullRequestMonitorSchedulerTest {
     void setUp() {
         PullRequestMonitorProperties properties = new PullRequestMonitorProperties(
                 true, "owner", "repo", 60_000);
-        scheduler = new PullRequestMonitorScheduler(gitHubApiClient, properties, commentService);
+        scheduler = new PullRequestMonitorScheduler(gitHubApiClient, properties, aiReviewService);
         logger = (Logger) LoggerFactory.getLogger(PullRequestMonitorScheduler.class);
         appender = new ListAppender<>();
         appender.start();
@@ -66,7 +66,7 @@ class PullRequestMonitorSchedulerTest {
         scheduler.poll();
 
         assertThat(infoMessages()).isEmpty();
-        verify(commentService, never()).commentOnChangedFiles("owner", "repo", 1);
+        verify(aiReviewService, never()).reviewAndComment("owner", "repo", 1);
     }
 
     @Test
@@ -83,7 +83,7 @@ class PullRequestMonitorSchedulerTest {
         assertThat(infoMessages()).containsExactly(
                 "New open pull request: owner/repo#2 | title=\"Add feature\" "
                         + "| author=author | url=https://github.com/owner/repo/pull/2");
-        verify(commentService).commentOnChangedFiles("owner", "repo", 2);
+        verify(aiReviewService).reviewAndComment("owner", "repo", 2);
     }
 
     @Test
@@ -99,8 +99,8 @@ class PullRequestMonitorSchedulerTest {
         assertThat(infoMessages()).hasSize(2);
         assertThat(infoMessages()).anyMatch(message -> message.contains("repo#2"));
         assertThat(infoMessages()).anyMatch(message -> message.contains("repo#3"));
-        verify(commentService).commentOnChangedFiles("owner", "repo", 2);
-        verify(commentService).commentOnChangedFiles("owner", "repo", 3);
+        verify(aiReviewService).reviewAndComment("owner", "repo", 2);
+        verify(aiReviewService).reviewAndComment("owner", "repo", 3);
     }
 
     @Test
@@ -121,7 +121,7 @@ class PullRequestMonitorSchedulerTest {
         });
         assertThat(infoMessages()).singleElement()
                 .satisfies(message -> assertThat(message).contains("repo#4"));
-        verify(commentService).commentOnChangedFiles("owner", "repo", 4);
+        verify(aiReviewService).reviewAndComment("owner", "repo", 4);
     }
 
     @Test
@@ -131,7 +131,7 @@ class PullRequestMonitorSchedulerTest {
                 .thenReturn(List.of(), List.of(added), List.of(added));
         doThrow(new GitHubApiException("Comment failed", 500, null))
                 .doNothing()
-                .when(commentService).commentOnChangedFiles("owner", "repo", 5);
+                .when(aiReviewService).reviewAndComment("owner", "repo", 5);
 
         scheduler.poll();
         scheduler.poll();
@@ -139,7 +139,7 @@ class PullRequestMonitorSchedulerTest {
 
         assertThat(infoMessages()).singleElement()
                 .satisfies(message -> assertThat(message).contains("repo#5"));
-        verify(commentService, times(2)).commentOnChangedFiles("owner", "repo", 5);
+        verify(aiReviewService, times(2)).reviewAndComment("owner", "repo", 5);
     }
 
     private PullRequestSummary pullRequest(long id, int number, String title) {

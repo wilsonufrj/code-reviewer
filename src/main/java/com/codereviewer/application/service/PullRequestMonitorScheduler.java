@@ -1,6 +1,7 @@
 package com.codereviewer.application.service;
 
 import com.codereviewer.application.config.PullRequestMonitorProperties;
+import com.codereviewer.infrastructure.ai.AiApiException;
 import com.codereviewer.infrastructure.github.GitHubApiClient;
 import com.codereviewer.infrastructure.github.GitHubApiException;
 import com.codereviewer.infrastructure.github.GitHubDtos.PullRequestSummary;
@@ -27,9 +28,9 @@ public class PullRequestMonitorScheduler {
 
     private final GitHubApiClient gitHubApiClient;
     private final PullRequestMonitorProperties properties;
-    private final PullRequestChangedFilesCommentService commentService;
+    private final PullRequestAiReviewService aiReviewService;
     private final Set<Long> observedPullRequestIds = new HashSet<>();
-    private final Set<Long> commentedPullRequestIds = new HashSet<>();
+    private final Set<Long> reviewedPullRequestIds = new HashSet<>();
     private boolean initialized;
 
     @PostConstruct
@@ -39,6 +40,7 @@ public class PullRequestMonitorScheduler {
 
     @Scheduled(fixedDelayString = "${github.pull-request-monitor.interval-ms:60000}")
     public synchronized void poll() {
+
         List<PullRequestSummary> openPullRequests;
         try {
             openPullRequests = gitHubApiClient.listOpenPullRequests(
@@ -53,7 +55,7 @@ public class PullRequestMonitorScheduler {
             openPullRequests.stream()
                     .map(PullRequestSummary::id)
                     .forEach(observedPullRequestIds::add);
-            commentedPullRequestIds.addAll(observedPullRequestIds);
+            reviewedPullRequestIds.addAll(observedPullRequestIds);
             initialized = true;
             return;
         }
@@ -62,19 +64,21 @@ public class PullRequestMonitorScheduler {
             if (observedPullRequestIds.add(pullRequest.id())) {
                 logNewPullRequest(pullRequest);
             }
-            if (!commentedPullRequestIds.contains(pullRequest.id())) {
-                commentOnChangedFiles(pullRequest);
+            if (!reviewedPullRequestIds.contains(pullRequest.id())) {
+                reviewWithAi(pullRequest);
             }
         }
     }
 
-    private void commentOnChangedFiles(PullRequestSummary pullRequest) {
+    private void reviewWithAi(PullRequestSummary pullRequest) {
         try {
-            commentService.commentOnChangedFiles(
+            
+            aiReviewService.reviewAndComment(
                     properties.owner(), properties.repository(), pullRequest.number());
-            commentedPullRequestIds.add(pullRequest.id());
-        } catch (GitHubApiException exception) {
-            log.warn("Unable to comment on pull request {}/{}#{}: {}",
+            reviewedPullRequestIds.add(pullRequest.id());
+
+        } catch (GitHubApiException | AiApiException exception) {
+            log.warn("Unable to complete AI review for pull request {}/{}#{}: {}",
                     properties.owner(), properties.repository(), pullRequest.number(),
                     exception.getMessage());
         }

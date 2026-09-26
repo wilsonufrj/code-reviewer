@@ -20,6 +20,12 @@ github:
     repository: ${GITHUB_PR_MONITOR_REPOSITORY}
     interval-ms: ${GITHUB_PR_MONITOR_INTERVAL_MS:60000}
 
+ai:
+  chat-completions-url: ${AI_CHAT_COMPLETIONS_URL}
+  model: ${AI_MODEL:zai-org/GLM-5.3}
+  bearer-token: ${AI_BEARER_TOKEN}
+  max-prompt-characters: ${AI_MAX_PROMPT_CHARACTERS:50000}
+
 server:
   port: 8080
 

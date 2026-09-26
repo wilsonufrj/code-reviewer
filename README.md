@@ -48,6 +48,10 @@ The application starts on `http://localhost:8080`.
 | `github.pull-request-monitor.owner` | `GITHUB_PR_MONITOR_OWNER` | — | Repository owner to monitor |
 | `github.pull-request-monitor.repository` | `GITHUB_PR_MONITOR_REPOSITORY` | — | Repository name to monitor |
 | `github.pull-request-monitor.interval-ms` | `GITHUB_PR_MONITOR_INTERVAL_MS` | `60000` | Poll delay in milliseconds |
+| `ai.chat-completions-url` | `AI_CHAT_COMPLETIONS_URL` | `http://10.0.35.2:4000/chat/completions` | OpenAI-compatible chat endpoint |
+| `ai.model` | `AI_MODEL` | `zai-org/GLM-5.3` | Model used for monitored PR reviews |
+| `ai.bearer-token` | `AI_BEARER_TOKEN` | — | Optional AI endpoint bearer token |
+| `ai.max-prompt-characters` | `AI_MAX_PROMPT_CHARACTERS` | `50000` | Maximum characters per AI request |
 
 ## Pull request monitor
 
@@ -68,14 +72,19 @@ new pull request once:
 New open pull request: octocat/hello-world#42 | title="Add feature" | author=octocat | url=https://github.com/octocat/hello-world/pull/42
 ```
 
-For every newly detected pull request, the application posts one or more Markdown comments listing
-all changed files and their GitHub status (`added`, `modified`, `removed`, or `renamed`). Reports are
-split into groups of 100 files. The GitHub token therefore needs pull-request read access and issue
-write access.
+For every newly detected pull request, the application sends the changed-file patches to the
+configured AI model and posts the resulting review together with a changed-file report. Large diffs
+are split into bounded requests, and large responses are split into numbered GitHub comments. Files
+whose patch is unavailable (such as binary files and pure renames) are still included as metadata.
+The GitHub token therefore needs pull-request read access and issue write access.
+
+Set `AI_BEARER_TOKEN` when the model endpoint requires bearer authentication. Failed AI requests or
+GitHub comments are retried on later polls; completed parts are retained in memory so they are not
+posted twice during the same application run.
 
 The monitor checks the newest 100 open pull requests. Its in-memory baseline resets whenever the
-application restarts. It reports and comments on new pull requests, but it does not trigger an
-automated code review.
+application restarts. It runs the AI review only for pull requests detected after that baseline;
+the existing REST and webhook review-rule flow is unchanged.
 
 ## API
 
